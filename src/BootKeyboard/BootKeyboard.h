@@ -35,10 +35,9 @@ typedef union {
   // Low level key report: up to 6 keys and shift, ctrl etc at once
   struct {
     uint8_t modifiers;
-    uint8_t reserved;
     uint8_t keycodes[6];
   };
-  uint8_t keys[8];
+  uint8_t keys[7];
 } HID_BootKeyboardReport_Data_t;
 
 
@@ -53,40 +52,17 @@ class BootKeyboard_ : public PluggableUSBModule {
 
   int sendReport(void);
 
-
+  boolean isModifierActive(uint8_t k);
+  boolean wasModifierActive(uint8_t k);
 
   uint8_t getLeds(void);
   uint8_t getProtocol(void);
-  void wakeupHost(void);
+  void setProtocol(uint8_t protocol);
 
-  void setFeatureReport(void* report, int length) {
-    if (length > 0) {
-      featureReport = (uint8_t*)report;
-      featureLength = length;
-
-      // Disable feature report by default
-      disableFeatureReport();
-    }
-  }
-
-  int availableFeatureReport(void) {
-    if (featureLength < 0) {
-      return featureLength & ~0x8000;
-    }
-    return 0;
-  }
-
-  void enableFeatureReport(void) {
-    featureLength &= ~0x8000;
-  }
-
-  void disableFeatureReport(void) {
-    featureLength |= 0x8000;
-  }
-
+  uint8_t default_protocol = HID_REPORT_PROTOCOL;
 
  protected:
-  HID_BootKeyboardReport_Data_t _keyReport;
+  HID_BootKeyboardReport_Data_t _keyReport, _lastKeyReport;
 
   // Implementation of the PUSBListNode
   int getInterface(uint8_t* interfaceCount);
@@ -98,10 +74,5 @@ class BootKeyboard_ : public PluggableUSBModule {
   uint8_t idle;
 
   uint8_t leds;
-
-  uint8_t* featureReport;
-  int featureLength;
 };
 extern BootKeyboard_ BootKeyboard;
-
-

@@ -39,17 +39,6 @@ static const uint8_t _hidReportDescriptorKeyboard[] PROGMEM = {
   0x95, 0x08,                      /*   REPORT_COUNT (8) */
   0x81, 0x02,                      /*   INPUT (Data,Var,Abs) */
 
-  /* Reserved byte, used for consumer reports, only works with linux */
-  /* NOT CURRENTLY USED BY THIS IMPLEMENTATION */
-  0x05, 0x0C,             		 /*   Usage Page (Consumer) */
-  0x95, 0x01,                      /*   REPORT_COUNT (1) */
-  0x75, 0x08,                      /*   REPORT_SIZE (8) */
-  0x15, 0x00,                      /*   LOGICAL_MINIMUM (0) */
-  0x26, 0xFF, 0x00,                /*   LOGICAL_MAXIMUM (255) */
-  0x19, 0x00,                      /*   USAGE_MINIMUM (0) */
-  0x29, 0xFF,                      /*   USAGE_MAXIMUM (255) */
-  0x81, 0x00,                      /*   INPUT (Data,Ary,Abs) */
-
   /* 5 LEDs for num lock etc, 3 left for advanced, custom usage */
   0x05, 0x08,						 /*   USAGE_PAGE (LEDs) */
   0x19, 0x01,						 /*   USAGE_MINIMUM (Num Lock) */
@@ -72,7 +61,7 @@ static const uint8_t _hidReportDescriptorKeyboard[] PROGMEM = {
   0xc0                            /* END_COLLECTION */
 };
 
-BootKeyboard_::BootKeyboard_(void) : PluggableUSBModule(1, 1, epType), protocol(HID_REPORT_PROTOCOL), idle(1), leds(0), featureReport(NULL), featureLength(0) {
+BootKeyboard_::BootKeyboard_(void) : PluggableUSBModule(1, 1, epType), protocol(HID_REPORT_PROTOCOL), idle(1), leds(0) {
   epType[0] = EP_TYPE_INTERRUPT_IN;
   PluggableUSB().plug(this);
 }
@@ -103,7 +92,7 @@ int BootKeyboard_::getDescriptor(USBSetup& setup) {
 
   // Reset the protocol on reenumeration. Normally the host should not assume the state of the protocol
   // due to the USB specs, but Windows and Linux just assumes its in report mode.
-  protocol = HID_REPORT_PROTOCOL;
+  protocol = default_protocol;
 
   return USB_SendControl(TRANSFER_PGM, _hidReportDescriptorKeyboard, sizeof(_hidReportDescriptorKeyboard));
 }
@@ -163,23 +152,7 @@ bool BootKeyboard_::setup(USBSetup& setup) {
       // Check if data has the correct length afterwards
       int length = setup.wLength;
 
-      // Feature (set feature report)
-      if (setup.wValueH == HID_REPORT_TYPE_FEATURE) {
-        // No need to check for negative featureLength values,
-        // except the host tries to send more then 32k bytes.
-        // We dont have that much ram anyways.
-        if (length == featureLength) {
-          USB_RecvControl(featureReport, featureLength);
-
-          // Block until data is read (make length negative)
-          disableFeatureReport();
-          return true;
-        }
-        // TODO fake clear data?
-      }
-
-      // Output (set led states)
-      else if (setup.wValueH == HID_REPORT_TYPE_OUTPUT) {
+      if (setup.wValueH == HID_REPORT_TYPE_OUTPUT) {
         if (length == sizeof(leds)) {
           USB_RecvControl(&leds, length);
           return true;
@@ -207,14 +180,19 @@ uint8_t BootKeyboard_::getProtocol(void) {
   return protocol;
 }
 
+void BootKeyboard_::setProtocol(uint8_t protocol) {
+  this->protocol = protocol;
+}
+
 int BootKeyboard_::sendReport(void) {
-  return USB_Send(pluggedEndpoint | TRANSFER_RELEASE, &_keyReport, sizeof(_keyReport));
+  if (memcmp(&_lastKeyReport, &_keyReport, sizeof(_keyReport))) {
+    // if the two reports are different, send a report
+    int returnCode = USB_Send(pluggedEndpoint | TRANSFER_RELEASE, &_keyReport, sizeof(_keyReport));
+    memcpy(&_lastKeyReport, &_keyReport, sizeof(_keyReport));
+    return returnCode;
+  }
+  return -1;
 }
-
-void BootKeyboard_::wakeupHost(void) {
-  USBDevice.wakeupHost();
-}
-
 
 // press() adds the specified key (printing, non-printing, or modifier)
 // to the persistent key report and sends the report.  Because of the way
@@ -260,9 +238,6 @@ size_t BootKeyboard_::press(uint8_t k) {
 // it shouldn't be repeated any more.
 
 size_t BootKeyboard_::release(uint8_t k) {
-  uint8_t i;
-  uint8_t count;
-
   if ((k >= HID_KEYBOARD_FIRST_MODIFIER) && (k <= HID_KEYBOARD_LAST_MODIFIER)) {
     // it's a modifier key
     _keyReport.modifiers = _keyReport.modifiers & (~(0x01 << (k - HID_KEYBOARD_LAST_MODIFIER)));
@@ -270,29 +245,27 @@ size_t BootKeyboard_::release(uint8_t k) {
     // it's some other key:
     // Test the key report to see if k is present.  Clear it if it exists.
     // Check all positions in case the key is present more than once (which it shouldn't be)
-    for (i = 0; i < sizeof(_keyReport.keycodes); i++) {
+    for (uint8_t i = 0; i < sizeof(_keyReport.keycodes); i++) {
       if (_keyReport.keycodes[i] == k) {
         _keyReport.keycodes[i] = 0;
       }
     }
 
-    // finally rearrange the keys list so that the free (= 0x00) are at the
+    // rearrange the keys list so that the free (= 0x00) are at the
     // end of the keys list - some implementations stop for keys at the
     // first occurence of an 0x00 in the keys list
     // so (0x00)(0x01)(0x00)(0x03)(0x02)(0x00) becomes
-    //    (0x01)(0x03)(0x02)(0x00)(0x00)(0x00)
-    count = 0; // holds the number of zeros we've found
-    i = 0;
-    while ((i + count) < sizeof(_keyReport.keycodes)) {
-      if (0 == _keyReport.keycodes[i]) {
-        count++; // one more zero
-        for (uint8_t j = i; j < sizeof(_keyReport.keycodes)-count; j++) {
-          _keyReport.keycodes[j] = _keyReport.keycodes[j+1];
-        }
-        _keyReport.keycodes[sizeof(_keyReport.keycodes)-count] = 0;
-      } else {
-        i++; // one more non-zero
+    //    (0x03)(0x02)(0x01)(0x00)(0x00)(0x00)
+    uint8_t current = 0, nextpos = 0;
+
+    while (current < sizeof(_keyReport.keycodes)) {
+      if (_keyReport.keycodes[current]) {
+        uint8_t tmp = _keyReport.keycodes[nextpos];
+        _keyReport.keycodes[nextpos] = _keyReport.keycodes[current];
+        _keyReport.keycodes[current] = tmp;
+        ++nextpos;
       }
+      ++current;
     }
   }
 
@@ -302,6 +275,28 @@ size_t BootKeyboard_::release(uint8_t k) {
 
 void BootKeyboard_::releaseAll(void) {
   memset(&_keyReport.keys, 0x00, sizeof(_keyReport.keys));
+}
+
+/* Returns true if the modifer key passed in will be sent during this key report
+ * Returns false in all other cases
+ * */
+boolean BootKeyboard_::isModifierActive(uint8_t k) {
+  if (k >= HID_KEYBOARD_FIRST_MODIFIER && k <= HID_KEYBOARD_LAST_MODIFIER) {
+    k = k - HID_KEYBOARD_FIRST_MODIFIER;
+    return !!(_keyReport.modifiers & (1 << k));
+  }
+  return false;
+}
+
+/* Returns true if the modifer key passed in was being sent during the previous key report
+ * Returns false in all other cases
+ * */
+boolean BootKeyboard_::wasModifierActive(uint8_t k) {
+  if (k >= HID_KEYBOARD_FIRST_MODIFIER && k <= HID_KEYBOARD_LAST_MODIFIER) {
+    k = k - HID_KEYBOARD_FIRST_MODIFIER;
+    return !!(_lastKeyReport.modifiers & (1 << k));
+  }
+  return false;
 }
 
 BootKeyboard_ BootKeyboard;
