@@ -16,6 +16,8 @@
    SOFTWARE.
  */
 
+#ifndef KEYBOARDIOHID_BUILD_WITHOUT_HID
+
 #include "HID.h"
 
 #if defined(USBCON)
@@ -158,3 +160,5 @@ int HID_::begin(void) {
 }
 
 #endif /* if defined(USBCON) */
+
+#endif /* ifndef KEYBOARDIOHID_BUILD_WITHOUT_HID */
