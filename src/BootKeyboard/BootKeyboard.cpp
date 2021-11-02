@@ -111,8 +111,6 @@ int BootKeyboard_::getDescriptor(USBSetup& setup) {
 
 
 void BootKeyboard_::begin() {
-  //  PluggableUSB().plug(this);
-
   // Force API to send a clean report.
   // This is important for and HID bridge where the receiver stays on,
   // while the sender is resetted.
