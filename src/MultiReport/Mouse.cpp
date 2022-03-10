@@ -83,9 +83,19 @@ void Mouse_::end() {
 }
 
 void Mouse_::click(uint8_t b) {
+  // If one or more of the buttons to be clicked was already pressed, we need to
+  // send a report to release it first, to guarantee that this will be a "click"
+  // and not merely a release.
+  if (report_.buttons & b) {
+    release(b);
+    sendReport();
+  }
+  // Next, send a report with the button(s) pressed:
   press(b);
   sendReport();
+  // Finally, send the report with the button(s) released:
   release(b);
+  sendReport();
 }
 
 void Mouse_::move(int8_t x, int8_t y, int8_t v_wheel, int8_t h_wheel) {
@@ -118,20 +128,16 @@ void Mouse_::sendReportUnchecked() {
 }
 
 void Mouse_::sendReport() {
-  // If the last report is different than the current report, then we need to
-  // send a report.  We guard sendReport like this so that calling code doesn't
-  // end up spamming the host with empty reports if sendReport is called in a
-  // tight loop.
-
-  // if the two reports are the same, check if they're empty, and return early
-  // without a report if they are.
-  static HID_MouseReport_Data_t empty_report;
-  if (memcmp(&last_report_, &report_, sizeof(report_)) == 0 &&
-      memcmp(&report_, &empty_report, sizeof(report_)) == 0)
-    return;
-
-  sendReportUnchecked();
-  memcpy(&last_report_, &report_, sizeof(report_));
+  // If the button state has not changed, and neither the cursor nor the wheel
+  // is being told to move, there is no need to send a report.  This check
+  // prevents us from sending lots of no-op reports if the caller is in a loop
+  // and not checking or buggy.
+  if (report_.buttons != prev_report_buttons_ ||
+      report_.xAxis != 0 || report_.yAxis != 0 ||
+      report_.vWheel != 0 || report_.hWheel != 0) {
+    sendReportUnchecked();
+    prev_report_buttons_ = report_.buttons;
+  }
 }
 
 Mouse_ Mouse;
