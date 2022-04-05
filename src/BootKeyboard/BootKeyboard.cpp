@@ -80,7 +80,7 @@ static const uint8_t BOOT_KEYBOARD_EP_SIZE = USB_EP_SIZE;
 #endif
 
 
-BootKeyboard_::BootKeyboard_(uint8_t protocol_) : PluggableUSBModule(1, 1, epType), default_protocol(protocol_), protocol(protocol_), idle(1), leds_wrapper({0}) {
+BootKeyboard_::BootKeyboard_(uint8_t protocol_) : PluggableUSBModule(1, 1, epType), default_protocol(protocol_), protocol(protocol_), idle(1), leds(0) {
 #ifdef ARCH_HAS_CONFIGURABLE_EP_SIZES
   epType[0] = EP_TYPE_INTERRUPT_IN(BOOT_KEYBOARD_EP_SIZE); // This is an 8 byte report, so ask for an 8 byte buffer, so reports aren't split
 #else
@@ -192,12 +192,32 @@ bool BootKeyboard_::setup(USBSetup& setup) {
       // Check if data has the correct length afterwards
       int length = setup.wLength;
 
+      // ------------------------------------------------------------
+      // Workaround for a bug in the GD32 core:
+      //
+      // On GD32, when we call `USV_RecvControl`, it casts the (void*) pointer
+      // we give it to `uint16_t*`, which means that it will alway write an even
+      // number of bytes to that pointer.  Because we don't want to overwrite
+      // the next byte in memory past `leds`, we use a temporary array that is
+      // guaranteed to be big enough, and copy the data from that:
       if (setup.wValueH == HID_REPORT_TYPE_OUTPUT) {
-        if (length == sizeof(leds_wrapper.leds)) {
-          USB_RecvControl(&leds_wrapper.leds, length);
+        if (length == sizeof(leds)) {
+          uint8_t raw_report_data[2];
+          USB_RecvControl(&raw_report_data, length);
+          leds = raw_report_data[0];
           return true;
         }
       }
+      // Once the GD32 core bug is fixed, we can replace the above code with the
+      // original code below:
+      // ------------------------------------------------------------
+      // if (setup.wValueH == HID_REPORT_TYPE_OUTPUT) {
+      //   if (length == sizeof(leds)) {
+      //     USB_RecvControl(&leds, length);
+      //     return true;
+      //   }
+      // }
+      // ------------------------------------------------------------
 
       // Input (set HID report)
       else if (setup.wValueH == HID_REPORT_TYPE_INPUT) {
@@ -213,7 +233,7 @@ bool BootKeyboard_::setup(USBSetup& setup) {
 }
 
 uint8_t BootKeyboard_::getLeds() {
-  return leds_wrapper.leds;
+  return leds;
 }
 
 uint8_t BootKeyboard_::getProtocol() {
