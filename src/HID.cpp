@@ -35,6 +35,11 @@ int HID_::getInterface(uint8_t* interfaceCount) {
     D_HIDREPORT(descriptorSize),
     D_ENDPOINT(USB_ENDPOINT_IN(pluggedEndpoint), USB_ENDPOINT_TYPE_INTERRUPT, USB_EP_SIZE, 0x01)
   };
+  if (!USB_Configured()) {
+    // Reset the protocol on reenumeration. Normally the host should not assume the state of the protocol
+    // due to the USB specs, but Windows and Linux just assumes its in report mode.
+    protocol = HID_REPORT_PROTOCOL;
+  }
   return USB_SendControl(0, &hidInterface, sizeof(hidInterface));
 }
 
@@ -61,10 +66,6 @@ int HID_::getDescriptor(USBSetup& setup) {
       return -1;
     total += res;
   }
-
-  // Reset the protocol on reenumeration. Normally the host should not assume the state of the protocol
-  // due to the USB specs, but Windows and Linux just assumes its in report mode.
-  protocol = HID_REPORT_PROTOCOL;
 
   USB_PackMessages(false);
   return total;

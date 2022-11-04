@@ -104,6 +104,7 @@ void USB_PackMessages(bool pack);
 #define USB_Recv                    USBD_Recv
 #define USB_Send                    USBD_Send
 #define USB_Flush                   USBD_Flush
+#define USB_Configured              USBDevice.configured
 
 #elif defined(ARDUINO_ARCH_SAMD)
 
@@ -119,6 +120,7 @@ void USB_PackMessages(bool pack);
 #define USB_RecvControl             USBDevice.recvControl
 #define USB_Send                    USBDevice.send
 #define USB_Flush                   USBDevice.flush
+#define USB_Configured              USBDevice.configured
 
 int USB_SendControl(void* y, uint8_t z);
 int USB_SendControl(uint8_t x, const void* y, uint8_t z);
@@ -143,7 +145,7 @@ int USB_SendControl(uint8_t x, const void* y, uint8_t z);
 constexpr uint16_t EP_TYPE_INTERRUPT_IN(uint8_t buffer_size) { return EPDesc(USB_TRX_IN, USB_EP_ATTR_INT, buffer_size).val; }
 constexpr uint16_t EP_TYPE_INTERRUPT_OUT(uint8_t buffer_size) { return EPDesc(USB_TRX_OUT, USB_EP_ATTR_INT, buffer_size).val; }
 
-
+#define USB_Configured USBCore().configured
 
 #else
 

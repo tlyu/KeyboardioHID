@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include "BootKeyboard.h"
 #include "DescriptorPrimitives.h"
 #include "HIDReportObserver.h"
+#include "HID-Settings.h"
 
 // See Appendix B of USB HID spec
 static const uint8_t boot_keyboard_hid_descriptor_[] PROGMEM = {
@@ -96,6 +97,11 @@ int BootKeyboard_::getInterface(uint8_t* interfaceCount) {
     D_HIDREPORT(sizeof(boot_keyboard_hid_descriptor_)),
     D_ENDPOINT(USB_ENDPOINT_IN(pluggedEndpoint), USB_ENDPOINT_TYPE_INTERRUPT, BOOT_KEYBOARD_EP_SIZE, 0x01)
   };
+  if (!USB_Configured()) {
+    // Reset the protocol on reenumeration. Normally the host should not assume the state of the protocol
+    // due to the USB specs, but Windows and Linux just assumes its in report mode.
+    protocol = default_protocol;
+  }
   return USB_SendControl(0, &hidInterface, sizeof(hidInterface));
 }
 
@@ -112,10 +118,6 @@ int BootKeyboard_::getDescriptor(USBSetup& setup) {
   if (setup.wIndex != pluggedInterface) {
     return 0;
   }
-
-  // Reset the protocol on reenumeration. Normally the host should not assume the state of the protocol
-  // due to the USB specs, but Windows and Linux just assumes its in report mode.
-  protocol = default_protocol;
 
   return USB_SendControl(TRANSFER_PGM, boot_keyboard_hid_descriptor_, sizeof(boot_keyboard_hid_descriptor_));
 }
