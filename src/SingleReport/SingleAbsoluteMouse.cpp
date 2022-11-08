@@ -46,7 +46,7 @@ static const uint8_t SINGLE_ABSOLUTEMOUSE_EP_SIZE = USB_EP_SIZE;
 
 
 
-SingleAbsoluteMouse_::SingleAbsoluteMouse_() : PluggableUSBModule(1, 1, epType), protocol(HID_REPORT_PROTOCOL), idle(1) {
+SingleAbsoluteMouse_::SingleAbsoluteMouse_() : PluggableUSBModule(1, 1, epType), protocol(HID_REPORT_PROTOCOL), idle(0) {
 
 #ifdef ARCH_HAS_CONFIGURABLE_EP_SIZES
   epType[0] = EP_TYPE_INTERRUPT_IN(SINGLE_ABSOLUTEMOUSE_EP_SIZE);
@@ -103,6 +103,10 @@ bool SingleAbsoluteMouse_::setup(USBSetup& setup) {
     }
     if (request == HID_GET_PROTOCOL) {
       // TODO: Send8(protocol);
+      return true;
+    }
+    if (request == HID_GET_IDLE) {
+      USB_SendControl(TRANSFER_RELEASE, &idle, sizeof(idle));
       return true;
     }
   }
