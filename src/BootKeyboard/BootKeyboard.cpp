@@ -97,11 +97,6 @@ int BootKeyboard_::getInterface(uint8_t* interfaceCount) {
     D_HIDREPORT(sizeof(boot_keyboard_hid_descriptor_)),
     D_ENDPOINT(USB_ENDPOINT_IN(pluggedEndpoint), USB_ENDPOINT_TYPE_INTERRUPT, BOOT_KEYBOARD_EP_SIZE, 0x01)
   };
-  if (!USB_Configured()) {
-    // Reset the protocol on reenumeration. Normally the host should not assume the state of the protocol
-    // due to the USB specs, but Windows and Linux just assumes its in report mode.
-    protocol = default_protocol;
-  }
   return USB_SendControl(0, &hidInterface, sizeof(hidInterface));
 }
 
@@ -371,6 +366,21 @@ bool BootKeyboard_::isAnyModifierActive() {
  * */
 bool BootKeyboard_::wasAnyModifierActive() {
   return last_report_.modifiers > 0;
+}
+
+void BootKeyboard_::checkReset() {
+  static bool was_configed;
+
+  if (was_configed) {
+    if (!USB_Configured()) {
+      was_configed = false;
+      protocol = default_protocol;
+    }
+  } else {
+    if (USB_Configured()) {
+      was_configed = true;
+    }
+  }
 }
 
 __attribute__((weak))
