@@ -31,6 +31,8 @@ THE SOFTWARE.
 #include "HIDTables.h"
 #include "HIDAliases.h"
 
+#define BOOTKB_AS_PADDING 1
+
 typedef union {
   // Low level key report: up to 6 keys and shift, ctrl etc at once
   struct {

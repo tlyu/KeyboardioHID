@@ -28,49 +28,25 @@ THE SOFTWARE.
 #include "HIDReportObserver.h"
 #include "HID-Settings.h"
 
-// See Appendix B of USB HID spec
+// This is not from Appendix B of USB HID spec. This report intentionally
+// sends everything as padding, so HID-aware hosts will ignore it.
 static const uint8_t boot_keyboard_hid_descriptor_[] PROGMEM = {
   //  Keyboard
   D_USAGE_PAGE, D_PAGE_GENERIC_DESKTOP,
   D_USAGE, D_USAGE_KEYBOARD,
 
   D_COLLECTION, D_APPLICATION,
-  // Modifiers
-  D_USAGE_PAGE, D_PAGE_KEYBOARD,
-  D_USAGE_MINIMUM, 0xe0,
-  D_USAGE_MAXIMUM, 0xe7,
-  D_LOGICAL_MINIMUM, 0x0,
-  D_LOGICAL_MAXIMUM, 0x1,
-  D_REPORT_SIZE, 0x1,
-  D_REPORT_COUNT, 0x8,
-  D_INPUT, (D_DATA | D_VARIABLE | D_ABSOLUTE),
 
-  // Reserved byte
-  D_REPORT_COUNT, 0x1,
+  // Report 8 bytes of padding, so HID-aware hosts will ignore
+  D_REPORT_COUNT, 0x8,
   D_REPORT_SIZE, 0x8,
   D_INPUT, (D_CONSTANT),
 
-  // LEDs
-  D_REPORT_COUNT, 0x5,
-  D_REPORT_SIZE, 0x1,
-  D_USAGE_PAGE, D_PAGE_LEDS,
-  D_USAGE_MINIMUM, 0x1,
-  D_USAGE_MAXIMUM, 0x5,
-  D_OUTPUT, (D_DATA | D_VARIABLE | D_ABSOLUTE),
-  // Pad LEDs up to a byte
+  // 1 byte of padding for output report, so HID-aware hosts will ignore
   D_REPORT_COUNT, 0x1,
-  D_REPORT_SIZE, 0x3,
+  D_REPORT_SIZE, 0x8,
   D_OUTPUT, (D_CONSTANT),
 
-  // Non-modifiers
-  D_REPORT_COUNT, 0x6,
-  D_REPORT_SIZE, 0x8,
-  D_LOGICAL_MINIMUM, 0x0,
-  D_LOGICAL_MAXIMUM, 0xff,
-  D_USAGE_PAGE, D_PAGE_KEYBOARD,
-  D_USAGE_MINIMUM, 0x0,
-  D_USAGE_MAXIMUM, 0xff,
-  D_INPUT, (D_DATA | D_ARRAY | D_ABSOLUTE),
   D_END_COLLECTION
 };
 
